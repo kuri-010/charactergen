@@ -43,23 +43,10 @@ from huggingface_hub import hf_hub_download, list_repo_files
 repo_id = "zjpshadow/CharacterGen"
 all_files = list_repo_files(repo_id, revision="main")
 
-#7-23-2024 Changed to allow GPU with compute < 8
-device_capability = -1
 
-#bfloat Support is typically 8 or higher.
-def check_bfloat16_support():
-   # Check if bfloat16 is supported
-   device_capability = torch.cuda.get_device_capability()
-
-   if device_capability[0] >= 8:
-      print("CUDA device capability is above 8, using bfloat16.")
-      return torch.bfloat16
-   else:
-      print("CUDA device capability is below 8, using float 32.")
-      return torch.float32
-
-#7-23-2024 Changed to allow GPU with compute < 8
-data_type_float = check_bfloat16_support()
+# Force CPU usage
+device = "cpu"
+data_type_float = torch.float32
 
 for file in all_files:
     if os.path.exists("../" + file):
@@ -74,9 +61,6 @@ class rm_bg_api:
             repo_id="skytnt/anime-seg", filename="isnetis.onnx",
         )
         providers: list[str] = ["CPUExecutionProvider"]
-        if not force_cpu and "CUDAExecutionProvider" in rt.get_available_providers():
-            providers = ["CUDAExecutionProvider"]
-
         self.session_infer = rt.InferenceSession(
             session_infer_path, providers=providers,
         )
@@ -111,7 +95,6 @@ def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 def get_bg_color(bg_color):
     if bg_color == 'white':
@@ -199,10 +182,10 @@ class Inference_API:
                 pose_image = Image.open(os.path.join(input_path, lm[1]))
                 crop_area = (128, 0, 640, 768)
                 pose_images.append(totensor(np.array(pose_image.crop(crop_area)).astype(np.float32)) / 255.)
-        camera_matrixs = torch.stack(cameras).unsqueeze(0).to("cuda")
-        pose_imgs_in = torch.stack(pose_images).to("cuda")
-        prompts = "high quality, best quality"
-        prompt_ids = tokenizer(
+                camera_matrixs = torch.stack(cameras).unsqueeze(0).to(device)
+                pose_imgs_in = torch.stack(pose_images).to(device)
+                prompts = "high quality, best quality"
+                prompt_ids = tokenizer(
             prompts, max_length=tokenizer.model_max_length, padding="max_length", truncation=True,
             return_tensors="pt"
         ).input_ids[0]
@@ -213,16 +196,15 @@ class Inference_API:
         imgs_in = process_image(input_image, totensor)
         imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
                 
-        with torch.autocast("cuda", dtype=weight_dtype):
-            imgs_in = imgs_in.to("cuda")
-            # B*Nv images
-            out = self.validation_pipeline(prompt=prompts, image=imgs_in.to(weight_dtype), generator=generator, 
-                                        num_inference_steps=timestep,
-                                        camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
-                                        height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
-                                        pose_guider=None, pose_image=pose_imgs_in, use_noise=use_noise, 
-                                        use_shifted_noise=use_shifted_noise, **validation).videos
-            out = rearrange(out, "B C f H W -> (B f) C H W", f=validation.video_length)
+        imgs_in = imgs_in.to(device)
+        # B*Nv images
+        out = self.validation_pipeline(prompt=prompts, image=imgs_in.to(weight_dtype), generator=generator, 
+                    num_inference_steps=timestep,
+                    camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
+                    height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
+                    pose_guider=None, pose_image=pose_imgs_in, use_noise=use_noise, 
+                    use_shifted_noise=use_shifted_noise, **validation).videos
+        out = rearrange(out, "B C f H W -> (B f) C H W", f=validation.video_length)
 
         image_outputs = []
         for bs in range(4):
@@ -231,7 +213,7 @@ class Inference_API:
             img_buf.seek(0)
             img = Image.open(img_buf)
             image_outputs.append(img)
-        torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()  # Not needed for CPU
         return image_outputs 
 
 @torch.no_grad()
@@ -250,29 +232,45 @@ def main(
 ):
     *_, config = inspect.getargvalues(inspect.currentframe())
 
-    device = "cuda"
+    device = "cpu"
 
-    tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_path, subfolder="tokenizer")
-    text_encoder = CLIPTextModel.from_pretrained(pretrained_model_path, subfolder="text_encoder")
-    image_encoder = CLIPVisionModelWithProjection.from_pretrained(image_encoder_path)
+    import psutil
+    print(f"[DEBUG] Available RAM before loading models: {psutil.virtual_memory().available / (1024**3):.2f} GB")
+    print(f"[DEBUG] Loading tokenizer from: {pretrained_model_path}/tokenizer")
+    tokenizer = CLIPTokenizer.from_pretrained(pretrained_model_path, subfolder="tokenizer", device_map="cpu")
+    print(f"[DEBUG] Loading text_encoder from: {pretrained_model_path}/text_encoder")
+    text_encoder = CLIPTextModel.from_pretrained(pretrained_model_path, subfolder="text_encoder", device_map="cpu")
+    print(f"[DEBUG] Loading image_encoder from: {image_encoder_path}")
+    image_encoder = CLIPVisionModelWithProjection.from_pretrained(image_encoder_path, device_map="cpu")
     feature_extractor = CLIPImageProcessor()
+    print(f"[DEBUG] Loading VAE from: {pretrained_model_path}/vae")
     vae = AutoencoderKL.from_pretrained(pretrained_model_path, subfolder="vae")
-    unet = UNetMV2DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet", local_crossattn=local_crossattn, **unet_from_pretrained_kwargs)
-    ref_unet = UNetMV2DRefModel.from_pretrained_2d(pretrained_model_path, subfolder="unet", local_crossattn=local_crossattn, **unet_from_pretrained_kwargs)
+    print(f"[DEBUG] Loading UNet from: {pretrained_model_path}/unet")
+    unet = UNetMV2DConditionModel.from_pretrained_2d(pretrained_model_path, subfolder="unet", local_crossattn=local_crossattn, device="cpu", **unet_from_pretrained_kwargs)
+    print(f"[DEBUG] Loading RefUNet from: {pretrained_model_path}/unet")
+    ref_unet = UNetMV2DRefModel.from_pretrained_2d(pretrained_model_path, subfolder="unet", local_crossattn=local_crossattn, device="cpu", **unet_from_pretrained_kwargs)
+    print(f"[DEBUG] Available RAM after loading models: {psutil.virtual_memory().available / (1024**3):.2f} GB")
     if use_pose_guider:
-        pose_guider = PoseGuider(noise_latent_channels=4).to("cuda")
+        pose_guider = PoseGuider(noise_latent_channels=4).to(device)
     else:
         pose_guider = None
 
+    print(f"[DEBUG] Loading UNet params from: {os.path.join(ckpt_dir, 'pytorch_model.bin')}")
     unet_params = torch.load(os.path.join(ckpt_dir, "pytorch_model.bin"), map_location="cpu")
+    print(f"[DEBUG] UNet params keys: {list(unet_params.keys())[:5]} ... total: {len(unet_params)}")
     if use_pose_guider:
+        print(f"[DEBUG] Loading pose_guider params from: {os.path.join(ckpt_dir, 'pytorch_model_1.bin')}")
         pose_guider_params = torch.load(os.path.join(ckpt_dir, "pytorch_model_1.bin"), map_location="cpu")
+        print(f"[DEBUG] Loading ref_unet params from: {os.path.join(ckpt_dir, 'pytorch_model_2.bin')}")
         ref_unet_params = torch.load(os.path.join(ckpt_dir, "pytorch_model_2.bin"), map_location="cpu")
         pose_guider.load_state_dict(pose_guider_params)
     else:
+        print(f"[DEBUG] Loading ref_unet params from: {os.path.join(ckpt_dir, 'pytorch_model_1.bin')}")
         ref_unet_params = torch.load(os.path.join(ckpt_dir, "pytorch_model_1.bin"), map_location="cpu")
+    print(f"[DEBUG] Loading state dicts into models...")
     unet.load_state_dict(unet_params)
     ref_unet.load_state_dict(ref_unet_params)
+    print(f"[DEBUG] Model state dicts loaded.")
 
     weight_dtype = torch.float16
 
@@ -286,7 +284,7 @@ def main(
     unet.requires_grad_(False)
     ref_unet.requires_grad_(False)
 
-    generator = torch.Generator(device="cuda")
+    generator = torch.Generator(device=device)
     inferapi = Inference_API()
     remove_api = rm_bg_api()
     def gen4views(image, width, height, seed, timestep, remove_bg):

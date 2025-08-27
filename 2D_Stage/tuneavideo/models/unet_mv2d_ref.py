@@ -71,8 +71,7 @@ from tuneavideo.models.unet_mv2d_blocks import (
     get_up_block,
 )
 from diffusers.models.attention_processor import Attention, AttnProcessor
-from diffusers.utils.import_utils import is_xformers_available
-from tuneavideo.models.transformer_mv2d import XFormersMVAttnProcessor, MVAttnProcessor
+from tuneavideo.models.transformer_mv2d import MVAttnProcessor
 from tuneavideo.models.refunet import ReferenceOnlyAttnProc
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -894,7 +893,7 @@ class UNetMV2DRefModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
         #   [batch,                    1, key_tokens]
         # this helps to broadcast it as a bias over attention scores, which will be in one of the following shapes:
         #   [batch,  heads, query_tokens, key_tokens] (e.g. torch sdp attn)
-        #   [batch * heads, query_tokens, key_tokens] (e.g. xformers or classic attn)
+    #   [batch * heads, query_tokens, key_tokens] (classic attn only, xformers removed)
         if attention_mask is not None:
             # assume that mask is expressed as:
             #   (1 = keep,      0 = discard)
@@ -1403,8 +1402,7 @@ class UNetMV2DRefModel(ModelMixin, ConfigMixin, UNet2DConditionLoadersMixin):
                 for name, _ in model.attn_processors.items():
                     if not name.endswith("attn1.processor"):
                         default_attn_proc = AttnProcessor()
-                    elif is_xformers_available():
-                        default_attn_proc = XFormersMVAttnProcessor()
+                    # xformers logic removed for CPU-only execution
                     else:
                         default_attn_proc = MVAttnProcessor()
                     unet_lora_attn_procs[name] = ReferenceOnlyAttnProc(
