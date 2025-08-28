@@ -196,8 +196,8 @@ class Inference_API:
         weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
         imgs_in = process_image(input_image, totensor)
         imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
-                
-        imgs_in = imgs_in.to(device)
+        # Convert input to float16 to match model weights
+        imgs_in = imgs_in.to(device, dtype=torch.float16)
         # B*Nv images
         out = self.validation_pipeline(prompt=prompts, image=imgs_in.to(weight_dtype), generator=generator, 
                     num_inference_steps=timestep,
