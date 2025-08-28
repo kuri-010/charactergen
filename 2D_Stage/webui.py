@@ -291,18 +291,23 @@ def main(
     def gen4views(image, width, height, seed, timestep, remove_bg):
         print("gen4views called")
         try:
+            print("Before remove_bg")
             if remove_bg:
                 image = remove_api.remove_background(
                     imgs=[np.array(image)],
                     alpha_min=0.1,
                     alpha_max=0.9,
                 )[0]
-            return inferapi.inference(
+                print("After remove_bg")
+            print("Before inference")
+            result = inferapi.inference(
                 image, vae, feature_extractor, image_encoder, unet, ref_unet, tokenizer, text_encoder, pretrained_model_path,
                 generator, validation, width, height, unet_condition_type,
                 pose_guider=pose_guider, use_noise=use_noise, use_shifted_noise=use_shifted_noise, noise_d=noise_d,
                 crop=True, seed=seed, timestep=timestep
             )
+            print("After inference")
+            return result
         except Exception as e:
             import traceback
             print("Error in gen4views:", e)
