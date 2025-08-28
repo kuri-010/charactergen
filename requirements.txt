@@ -1,14 +1,11 @@
 gradio
 rm_anime_bg
 # for 2D_stage
-############################################################
-# For CPU-only installation, run these commands first:
-# pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-# Then install the rest of the requirements with:
-# pip install -r requirements.txt
-############################################################
 accelerate
 transformers
+xformers 
+torch
+torchvision
 diffusers==0.24.0
 ipdb
 einops
@@ -26,3 +23,4 @@ open3d
 trimesh
 pymeshlab
 pygltflib
+
