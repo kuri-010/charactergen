@@ -3,9 +3,6 @@ rm_anime_bg
 # for 2D_stage
 accelerate
 transformers
-xformers 
-torch
-torchvision
 diffusers==0.24.0
 ipdb
 einops
