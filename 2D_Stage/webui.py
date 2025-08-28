@@ -289,7 +289,24 @@ def main(
     inferapi = Inference_API()
     remove_api = rm_bg_api()
     def gen4views(image, width, height, seed, timestep, remove_bg):
-         
+        try:
+            if remove_bg:
+                image = remove_api.remove_background(
+                    imgs=[np.array(image)],
+                    alpha_min=0.1,
+                    alpha_max=0.9,
+                )[0]
+            return inferapi.inference(
+                image, vae, feature_extractor, image_encoder, unet, ref_unet, tokenizer, text_encoder, pretrained_model_path,
+                generator, validation, width, height, unet_condition_type,
+                pose_guider=pose_guider, use_noise=use_noise, use_shifted_noise=use_shifted_noise, noise_d=noise_d,
+                crop=True, seed=seed, timestep=timestep
+            )
+        except Exception as e:
+            import traceback
+            print("Error in gen4views:", e)
+            traceback.print_exc()
+            return [None, None, None, None]
     with gr.Blocks() as demo:
         gr.Markdown("# [SIGGRAPH'24] CharacterGen: Efficient 3D Character Generation from Single Images with Multi-View Pose Calibration")
         gr.Markdown("# 2D Stage: One Image to Four Views of Character Image")
