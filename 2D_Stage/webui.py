@@ -92,6 +92,7 @@ check_min_version("0.24.0")
 logger = get_logger(__name__, log_level="INFO")
 
 def set_seed(seed):
+    seed = int(seed)
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
