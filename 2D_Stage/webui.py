@@ -199,7 +199,7 @@ class Inference_API:
         # Convert input to float16 to match model weights
         imgs_in = imgs_in.to(device, dtype=torch.float16)
         # B*Nv images
-        out = self.validation_pipeline(prompt=prompts, image=imgs_in.to(weight_dtype), generator=generator, 
+        out = self.validation_pipeline(prompt=prompts, image=imgs_in, generator=generator, 
                     num_inference_steps=timestep,
                     camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
                     height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
