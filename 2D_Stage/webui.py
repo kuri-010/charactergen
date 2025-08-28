@@ -92,7 +92,7 @@ check_min_version("0.24.0")
 logger = get_logger(__name__, log_level="INFO")
 
 def set_seed(seed):
-    seed = int(seed)
+    seed = int(seed)  # Ensure seed is always an integer
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -172,10 +172,10 @@ class Inference_API:
                 self.validation_pipeline.enable_vae_slicing()
                 self.validation_pipeline.set_progress_bar_config(disable=True)
 
-        print("inference: preparing tensors")
-        totensor = transforms.ToTensor()
+            print("inference: preparing tensors")
+            totensor = transforms.ToTensor()
 
-        print("inference: loading pose.json")
+            print("inference: loading pose.json")
             metas = json.load(open("./material/pose.json", "r"))
             cameras = []
             pose_images = []
@@ -199,8 +199,7 @@ class Inference_API:
                 return_tensors="pt"
             ).input_ids[0]
 
-        # (B*Nv, 3, H, W)
-        print("inference: preparing input image")
+            print("inference: preparing input image")
             # (B*Nv, 3, H, W)
             B = 1
             weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
@@ -217,8 +216,8 @@ class Inference_API:
                         use_shifted_noise=use_shifted_noise, **validation).videos
             print("inference: pipeline finished")
             out = rearrange(out, "B C f H W -> (B f) C H W", f=validation.video_length)
-                   
-        image_outputs = []
+
+            image_outputs = []
             print("inference: saving images")
             for bs in range(4):
                 img_buf = io.BytesIO()
@@ -331,6 +330,7 @@ def main(
             print("Error in gen4views:", e)
             traceback.print_exc()
             return [None, None, None, None]
+
     with gr.Blocks() as demo:
         gr.Markdown("# [SIGGRAPH'24] CharacterGen: Efficient 3D Character Generation from Single Images with Multi-View Pose Calibration")
         gr.Markdown("# 2D Stage: One Image to Four Views of Character Image")
@@ -365,11 +365,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="./configs/infer.yaml")
     args = parser.parse_args()
+
     import sys
     import traceback
     def handle_exception(exc_type, exc_value, exc_traceback):
         print("Uncaught exception:", exc_value)
         traceback.print_exception(exc_type, exc_value, exc_traceback)
     sys.excepthook = handle_exception
-
     main(**OmegaConf.load(args.config))
