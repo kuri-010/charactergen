@@ -151,71 +151,89 @@ class Inference_API:
     @torch.no_grad()
     def inference(self, input_image, vae, feature_extractor, image_encoder, unet, ref_unet, tokenizer, text_encoder, pretrained_model_path, generator, validation, val_width, val_height, unet_condition_type,
                     pose_guider=None, use_noise=True, use_shifted_noise=False, noise_d=256, crop=False, seed=100, timestep=20):
-        set_seed(seed)
-        # Get the validation pipeline
-        if self.validation_pipeline is None:
-            noise_scheduler = DDIMScheduler.from_pretrained(pretrained_model_path, subfolder="scheduler")
-            if use_shifted_noise:
-                print(f"enable shifted noise for {val_height} to {noise_d}")
-                betas = shifted_noise(noise_scheduler.betas, image_d=val_height, noise_d=noise_d)
-                noise_scheduler.betas = betas
-                noise_scheduler.alphas = 1 - betas
-                noise_scheduler.alphas_cumprod = torch.cumprod(noise_scheduler.alphas, dim=0)
-            self.validation_pipeline = TuneAVideoPipeline(
-                vae=vae, text_encoder=text_encoder, tokenizer=tokenizer, unet=unet, ref_unet=ref_unet,feature_extractor=feature_extractor,image_encoder=image_encoder,
-                scheduler=noise_scheduler
-            )
-            self.validation_pipeline.enable_vae_slicing()
-            self.validation_pipeline.set_progress_bar_config(disable=True)
+        try:
+            print("inference: set_seed")
+            set_seed(seed)
+            print("inference: pipeline check")
+            # Get the validation pipeline
+            if self.validation_pipeline is None:
+                print("inference: building pipeline")
+                noise_scheduler = DDIMScheduler.from_pretrained(pretrained_model_path, subfolder="scheduler")
+                if use_shifted_noise:
+                    print(f"enable shifted noise for {val_height} to {noise_d}")
+                    betas = shifted_noise(noise_scheduler.betas, image_d=val_height, noise_d=noise_d)
+                    noise_scheduler.betas = betas
+                    noise_scheduler.alphas = 1 - betas
+                    noise_scheduler.alphas_cumprod = torch.cumprod(noise_scheduler.alphas, dim=0)
+                self.validation_pipeline = TuneAVideoPipeline(
+                    vae=vae, text_encoder=text_encoder, tokenizer=tokenizer, unet=unet, ref_unet=ref_unet,feature_extractor=feature_extractor,image_encoder=image_encoder,
+                    scheduler=noise_scheduler
+                )
+                self.validation_pipeline.enable_vae_slicing()
+                self.validation_pipeline.set_progress_bar_config(disable=True)
 
+        print("inference: preparing tensors")
         totensor = transforms.ToTensor()
 
-        metas = json.load(open("./material/pose.json", "r"))
-        cameras = []
-        pose_images = []
-        input_path = "./material"
-        for lm in metas:
-            cameras.append(torch.tensor(np.array(lm[0]).reshape(4, 4).transpose(1,0)[:3, :4]).reshape(-1))
-            if not crop:
-                pose_images.append(totensor(np.asarray(Image.open(os.path.join(input_path, lm[1])).resize(
-                    (val_height, val_width), resample=PIL.Image.BICUBIC)).astype(np.float32) / 255.))
-            else:
-                pose_image = Image.open(os.path.join(input_path, lm[1]))
-                crop_area = (128, 0, 640, 768)
-                pose_images.append(totensor(np.array(pose_image.crop(crop_area)).astype(np.float32)) / 255.)
-                camera_matrixs = torch.stack(cameras).unsqueeze(0).to(device)
-                pose_imgs_in = torch.stack(pose_images).to(device)
-                prompts = "high quality, best quality"
-                prompt_ids = tokenizer(
-            prompts, max_length=tokenizer.model_max_length, padding="max_length", truncation=True,
-            return_tensors="pt"
-        ).input_ids[0]
+        print("inference: loading pose.json")
+            metas = json.load(open("./material/pose.json", "r"))
+            cameras = []
+            pose_images = []
+            input_path = "./material"
+            for lm in metas:
+                cameras.append(torch.tensor(np.array(lm[0]).reshape(4, 4).transpose(1,0)[:3, :4]).reshape(-1))
+                if not crop:
+                    pose_images.append(totensor(np.asarray(Image.open(os.path.join(input_path, lm[1])).resize(
+                        (val_height, val_width), resample=PIL.Image.BICUBIC)).astype(np.float32) / 255.))
+                else:
+                    pose_image = Image.open(os.path.join(input_path, lm[1]))
+                    crop_area = (128, 0, 640, 768)
+                    pose_images.append(totensor(np.array(pose_image.crop(crop_area)).astype(np.float32)) / 255.)
+            print("inference: stacking camera matrices and pose images")
+            camera_matrixs = torch.stack(cameras).unsqueeze(0).to(device)
+            pose_imgs_in = torch.stack(pose_images).to(device)
+            prompts = "high quality, best quality"
+            print("inference: tokenizing prompts")
+            prompt_ids = tokenizer(
+                prompts, max_length=tokenizer.model_max_length, padding="max_length", truncation=True,
+                return_tensors="pt"
+            ).input_ids[0]
 
         # (B*Nv, 3, H, W)
-        B = 1
-        weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
-        imgs_in = process_image(input_image, totensor)
-        imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
-        # Convert input to float16 to match model weights
-        imgs_in = imgs_in.to(device, dtype=torch.float16)
-        # B*Nv images
-        out = self.validation_pipeline(prompt=prompts, image=imgs_in, generator=generator, 
-                    num_inference_steps=timestep,
-                    camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
-                    height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
-                    pose_guider=None, pose_image=pose_imgs_in, use_noise=use_noise, 
-                    use_shifted_noise=use_shifted_noise, **validation).videos
-        out = rearrange(out, "B C f H W -> (B f) C H W", f=validation.video_length)
-
+        print("inference: preparing input image")
+            # (B*Nv, 3, H, W)
+            B = 1
+            weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
+            imgs_in = process_image(input_image, totensor)
+            imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
+            imgs_in = imgs_in.to(device, dtype=torch.float16)  # Ensure input is float16
+            print("inference: running pipeline")
+            # B*Nv images
+            out = self.validation_pipeline(prompt=prompts, image=imgs_in, generator=generator, 
+                        num_inference_steps=timestep,
+                        camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
+                        height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
+                        pose_guider=None, pose_image=pose_imgs_in, use_noise=use_noise, 
+                        use_shifted_noise=use_shifted_noise, **validation).videos
+            print("inference: pipeline finished")
+            out = rearrange(out, "B C f H W -> (B f) C H W", f=validation.video_length)
+                   
         image_outputs = []
-        for bs in range(4):
-            img_buf = io.BytesIO()
-            save_image(out[bs], img_buf, format='PNG')
-            img_buf.seek(0)
-            img = Image.open(img_buf)
-            image_outputs.append(img)
-    # torch.cuda.empty_cache()  # Not needed for CPU
-        return image_outputs 
+            print("inference: saving images")
+            for bs in range(4):
+                img_buf = io.BytesIO()
+                save_image(out[bs], img_buf, format='PNG')
+                img_buf.seek(0)
+                img = Image.open(img_buf)
+                image_outputs.append(img)
+            print("inference: done")
+            # torch.cuda.empty_cache()  # Not needed for CPU
+            return image_outputs 
+        except Exception as e:
+            import traceback
+            print("Error in inference:", e)
+            traceback.print_exc()
+            return [None, None, None, None]
 
 @torch.no_grad()
 def main(
