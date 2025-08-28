@@ -289,6 +289,7 @@ def main(
     inferapi = Inference_API()
     remove_api = rm_bg_api()
     def gen4views(image, width, height, seed, timestep, remove_bg):
+        print("gen4views called")
         try:
             if remove_bg:
                 image = remove_api.remove_background(
@@ -341,5 +342,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="./configs/infer.yaml")
     args = parser.parse_args()
+    import sys
+    import traceback
+    def handle_exception(exc_type, exc_value, exc_traceback):
+        print("Uncaught exception:", exc_value)
+        traceback.print_exception(exc_type, exc_value, exc_traceback)
+    sys.excepthook = handle_exception
 
     main(**OmegaConf.load(args.config))
