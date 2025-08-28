@@ -329,7 +329,7 @@ def main(
             outputs=[output]
         )
 
-    demo.launch()
+    demo.launch(share=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
