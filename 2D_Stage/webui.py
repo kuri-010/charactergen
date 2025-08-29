@@ -193,11 +193,6 @@ class Inference_API:
             print("inference: stacking camera matrices and pose images")
             camera_matrixs = torch.stack(cameras).unsqueeze(0).to(device)
             pose_imgs_in = torch.stack(pose_images).to(device)
-            # Resize pose_imgs_in to match imgs_in spatial dimensions if needed
-            if pose_imgs_in.shape[2:] != imgs_in.shape[2:]:
-                import torch.nn.functional as F
-                pose_imgs_in = F.interpolate(pose_imgs_in, size=imgs_in.shape[2:], mode='bilinear', align_corners=False)
-                print(f"[DEBUG] Resized pose_imgs_in to: {pose_imgs_in.shape}")
             prompts = "high quality, best quality"
             print("inference: tokenizing prompts")
             prompt_ids = tokenizer(
@@ -208,6 +203,15 @@ class Inference_API:
             print("inference: preparing input image")
             # (B*Nv, 3, H, W)
             B = 1
+            weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
+            imgs_in = process_image(input_image, totensor)
+            imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
+            imgs_in = imgs_in.to(device, dtype=torch.float16)  # Ensure input is float16
+            # Resize pose_imgs_in to match imgs_in spatial dimensions if needed
+            if pose_imgs_in.shape[2:] != imgs_in.shape[2:]:
+                import torch.nn.functional as F
+                pose_imgs_in = F.interpolate(pose_imgs_in, size=imgs_in.shape[2:], mode='bilinear', align_corners=False)
+                print(f"[DEBUG] Resized pose_imgs_in to: {pose_imgs_in.shape}")
             weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
             imgs_in = process_image(input_image, totensor)
             imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
