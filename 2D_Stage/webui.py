@@ -131,6 +131,7 @@ def process_image(image, totensor):
     top = (max_height - image.height) // 2
     new_image.paste(image, (left, top))
 
+    # Reduce image size for debugging and lower memory usage
     image = new_image.resize((256, 384), resample=PIL.Image.BICUBIC)
     image = np.array(image)
     image = image.astype(np.float32) / 255.
@@ -192,6 +193,11 @@ class Inference_API:
             print("inference: stacking camera matrices and pose images")
             camera_matrixs = torch.stack(cameras).unsqueeze(0).to(device)
             pose_imgs_in = torch.stack(pose_images).to(device)
+            # Resize pose_imgs_in to match imgs_in spatial dimensions if needed
+            if pose_imgs_in.shape[2:] != imgs_in.shape[2:]:
+                import torch.nn.functional as F
+                pose_imgs_in = F.interpolate(pose_imgs_in, size=imgs_in.shape[2:], mode='bilinear', align_corners=False)
+                print(f"[DEBUG] Resized pose_imgs_in to: {pose_imgs_in.shape}")
             prompts = "high quality, best quality"
             print("inference: tokenizing prompts")
             prompt_ids = tokenizer(
