@@ -237,6 +237,12 @@ class Inference_API:
             print(f"  pose_imgs_in: {pose_imgs_in.shape}, dtype: {pose_imgs_in.dtype}, device: {pose_imgs_in.device}")
             print(f"  use_noise: {use_noise}, use_shifted_noise: {use_shifted_noise}")
             print(f"  validation: {validation}")
+            # Force float32 on CPU for all tensors
+            if str(device) == 'cpu':
+                imgs_in = imgs_in.to(torch.float32)
+                pose_imgs_in = pose_imgs_in.to(torch.float32)
+                camera_matrixs_fixed = camera_matrixs_fixed.to(torch.float32)
+            print("[DEBUG] About to call pipeline...")
             try:
                 out = self.validation_pipeline(
                     prompt=prompts,
@@ -254,8 +260,9 @@ class Inference_API:
                     use_shifted_noise=use_shifted_noise,
                     **validation
                 ).videos
-                print("inference: pipeline finished")
+                print("[DEBUG] Pipeline call completed!")
             except Exception as e:
+                print("[DEBUG] Pipeline call failed!")
                 import traceback
                 print("Error during pipeline call:", e)
                 traceback.print_exc()
@@ -354,6 +361,9 @@ def main(
         print("\n========== DEBUG: Starting 4-view generation ==========")
         try:
             print("Before remove_bg")
+            # Force test with lower resolution for debug (128x128)
+            width = 128
+            height = 128
             if remove_bg:
                 image = remove_api.remove_background(
                     imgs=[np.array(image)],
