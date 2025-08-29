@@ -207,14 +207,31 @@ class Inference_API:
             imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
             imgs_in = imgs_in.to(device, dtype=torch.float16)  # Ensure input is float16
             print("inference: running pipeline")
-            # B*Nv images
-            out = self.validation_pipeline(prompt=prompts, image=imgs_in, generator=generator, 
-                        num_inference_steps=timestep,
-                        camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
-                        height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
-                        pose_guider=None, pose_image=pose_imgs_in, use_noise=use_noise, 
-                        use_shifted_noise=use_shifted_noise, **validation).videos
-            print("inference: pipeline finished")
+            # Print all input shapes and types
+            print(f"  prompts: {prompts} (type: {type(prompts)})")
+            print(f"  imgs_in: {imgs_in.shape}, dtype: {imgs_in.dtype}, device: {imgs_in.device}")
+            print(f"  generator: {generator}")
+            print(f"  timestep: {timestep}")
+            print(f"  camera_matrixs: {camera_matrixs.shape}, dtype: {camera_matrixs.dtype}, device: {camera_matrixs.device}")
+            print(f"  prompt_ids: {prompt_ids.shape}, dtype: {prompt_ids.dtype}")
+            print(f"  val_height: {val_height}, val_width: {val_width}")
+            print(f"  unet_condition_type: {unet_condition_type}")
+            print(f"  pose_imgs_in: {pose_imgs_in.shape}, dtype: {pose_imgs_in.dtype}, device: {pose_imgs_in.device}")
+            print(f"  use_noise: {use_noise}, use_shifted_noise: {use_shifted_noise}")
+            print(f"  validation: {validation}")
+            try:
+                out = self.validation_pipeline(prompt=prompts, image=imgs_in, generator=generator, 
+                            num_inference_steps=timestep,
+                            camera_matrixs=camera_matrixs.to(weight_dtype), prompt_ids=prompt_ids, 
+                            height=val_height, width=val_width, unet_condition_type=unet_condition_type, 
+                            pose_guider=None, pose_image=pose_imgs_in, use_noise=use_noise, 
+                            use_shifted_noise=use_shifted_noise, **validation).videos
+                print("inference: pipeline finished")
+            except Exception as e:
+                import traceback
+                print("Error during pipeline call:", e)
+                traceback.print_exc()
+                return [None, None, None, None]
             out = rearrange(out, "B C f H W -> (B f) C H W", f=validation.video_length)
 
             image_outputs = []
