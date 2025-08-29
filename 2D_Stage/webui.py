@@ -131,7 +131,7 @@ def process_image(image, totensor):
     top = (max_height - image.height) // 2
     new_image.paste(image, (left, top))
 
-    image = new_image.resize((512, 768), resample=PIL.Image.BICUBIC)
+    image = new_image.resize((256, 384), resample=PIL.Image.BICUBIC)
     image = np.array(image)
     image = image.astype(np.float32) / 255.
     assert image.shape[-1] == 4  # RGBA
