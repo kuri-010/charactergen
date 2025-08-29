@@ -757,6 +757,7 @@ class XFormersMVAttnProcessor:
         num_views=1.,
         multiview_attention=True,
         cross_domain_attention=False,
+        **kwargs
     ):
         residual = hidden_states
 
@@ -855,7 +856,9 @@ class XFormersJointAttnProcessor:
         encoder_hidden_states=None,
         attention_mask=None,
         temb=None,
-        num_tasks=2
+        num_tasks=2,
+        cross_domain_attention=False,
+        **kwargs
     ):
         
         residual = hidden_states
