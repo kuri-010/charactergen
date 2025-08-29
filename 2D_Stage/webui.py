@@ -351,7 +351,7 @@ def main(
     inferapi = Inference_API()
     remove_api = rm_bg_api()
     def gen4views(image, width, height, seed, timestep, remove_bg):
-        print("gen4views called")
+        print("\n========== DEBUG: Starting 4-view generation ==========")
         try:
             print("Before remove_bg")
             if remove_bg:
@@ -369,11 +369,14 @@ def main(
                 crop=True, seed=seed, timestep=timestep
             )
             print("After inference")
+            print("========== DEBUG: 4-view generation completed ==========")
             return result
         except Exception as e:
             import traceback
+            print("========== DEBUG: 4-view generation failed ==========")
             print("Error in gen4views:", e)
             traceback.print_exc()
+            print("========== DEBUG: 4-view generation error above ==========")
             return [None, None, None, None]
 
     with gr.Blocks() as demo:
