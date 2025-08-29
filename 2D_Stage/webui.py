@@ -206,7 +206,11 @@ class Inference_API:
             weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
             imgs_in = process_image(input_image, totensor)
             imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
-            imgs_in = imgs_in.to(device, dtype=torch.float16)  # Ensure input is float16
+            # Only use float16 on GPU, always float32 on CPU
+            if str(device) == 'cpu':
+                imgs_in = imgs_in.to(device, dtype=torch.float32)
+            else:
+                imgs_in = imgs_in.to(device, dtype=torch.float16)
             # Resize pose_imgs_in to match imgs_in spatial dimensions if needed
             if pose_imgs_in.shape[2:] != imgs_in.shape[2:]:
                 import torch.nn.functional as F
@@ -342,8 +346,8 @@ def main(
     ref_unet.load_state_dict(ref_unet_params)
     print(f"[DEBUG] Model state dicts loaded.")
 
-    weight_dtype = torch.float16
-
+    # Always use float32 on CPU for all models
+    weight_dtype = torch.float32
     text_encoder.to(device, dtype=weight_dtype)
     image_encoder.to(device, dtype=weight_dtype)
     vae.to(device, dtype=weight_dtype)
