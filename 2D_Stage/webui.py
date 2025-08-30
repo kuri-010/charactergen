@@ -203,6 +203,9 @@ class Inference_API:
             print("inference: preparing input image")
             # (B*Nv, 3, H, W)
             B = 1
+            # Set higher output resolution
+            val_height = 768
+            val_width = 512
             weight_dtype = data_type_float #7-23-2024 Changed to allow GPU with compute < 8
             imgs_in = process_image(input_image, totensor)
             imgs_in = rearrange(imgs_in.unsqueeze(0).unsqueeze(0), "B Nv C H W -> (B Nv) C H W")
@@ -211,6 +214,15 @@ class Inference_API:
                 imgs_in = imgs_in.to(device, dtype=torch.float32)
             else:
                 imgs_in = imgs_in.to(device, dtype=torch.float16)
+            print(f"[DEBUG] Input image shape: {imgs_in.shape}, dtype: {imgs_in.dtype}")
+            # Visualize pose images
+            for idx, pose_img in enumerate(pose_images):
+                pil_img = transforms.ToPILImage()(pose_img)
+                pil_img.save(f"pose_debug_{idx}.png")
+                print(f"[DEBUG] Saved pose image {idx} as pose_debug_{idx}.png, shape: {pose_img.shape}")
+            # Print camera matrices
+            for idx, cam in enumerate(cameras):
+                print(f"[DEBUG] Camera matrix {idx}: {cam}")
             # Resize pose_imgs_in to match imgs_in spatial dimensions if needed
             if pose_imgs_in.shape[2:] != imgs_in.shape[2:]:
                 import torch.nn.functional as F
@@ -236,7 +248,7 @@ class Inference_API:
             print(f"  timestep: {timestep}")
             print(f"  camera_matrixs: {camera_matrixs_fixed.shape}, dtype: {camera_matrixs_fixed.dtype}, device: {camera_matrixs_fixed.device}")
             print(f"  prompt_ids: {prompt_ids_fixed.shape}, dtype: {prompt_ids_fixed.dtype}")
-            print(f"  val_height: {val_height_int}, val_width: {val_width_int}")
+            print(f"  val_height: {val_height}, val_width: {val_width}")
             print(f"  unet_condition_type: {unet_condition_type}")
             print(f"  pose_imgs_in: {pose_imgs_in.shape}, dtype: {pose_imgs_in.dtype}, device: {pose_imgs_in.device}")
             print(f"  use_noise: {use_noise}, use_shifted_noise: {use_shifted_noise}")
@@ -247,16 +259,17 @@ class Inference_API:
                 pose_imgs_in = pose_imgs_in.to(torch.float32)
                 camera_matrixs_fixed = camera_matrixs_fixed.to(torch.float32)
             print("[DEBUG] About to call pipeline...")
+            # Use more timesteps for better quality
             try:
                 out = self.validation_pipeline(
                     prompt=prompts,
                     image=imgs_in,
                     generator=generator,
-                    num_inference_steps=timestep,
+                    num_inference_steps=80,
                     camera_matrixs=camera_matrixs_fixed,
                     prompt_ids=prompt_ids_fixed,
-                    height=val_height_int,
-                    width=val_width_int,
+                    height=val_height,
+                    width=val_width,
                     unet_condition_type=unet_condition_type,
                     pose_guider=None,
                     pose_image=pose_imgs_in,
@@ -281,7 +294,6 @@ class Inference_API:
                 img_buf.seek(0)
                 img = Image.open(img_buf)
                 print(f"[DEBUG] Output image {bs} type: {type(img)} size: {getattr(img, 'size', None)}")
-                # Save to disk for inspection
                 img.save(f"output_view_{bs}.png")
                 image_outputs.append(img)
             print("inference: done")
