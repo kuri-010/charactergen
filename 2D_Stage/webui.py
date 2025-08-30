@@ -265,7 +265,7 @@ class Inference_API:
                     prompt=prompts,
                     image=imgs_in,
                     generator=generator,
-                    num_inference_steps=80,
+                    num_inference_steps=40,
                     camera_matrixs=camera_matrixs_fixed,
                     prompt_ids=prompt_ids_fixed,
                     height=val_height,
