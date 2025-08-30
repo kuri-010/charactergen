@@ -280,6 +280,9 @@ class Inference_API:
                 save_image(out[bs], img_buf, format='PNG')
                 img_buf.seek(0)
                 img = Image.open(img_buf)
+                print(f"[DEBUG] Output image {bs} type: {type(img)} size: {getattr(img, 'size', None)}")
+                # Save to disk for inspection
+                img.save(f"output_view_{bs}.png")
                 image_outputs.append(img)
             print("inference: done")
             # torch.cuda.empty_cache()  # Not needed for CPU
