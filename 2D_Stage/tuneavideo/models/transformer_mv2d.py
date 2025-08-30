@@ -644,7 +644,8 @@ class MVAttnProcessor:
         attention_mask=None,
         temb=None,
         num_views=1,
-        multiview_attention=True
+        multiview_attention=True,
+        **kwargs
     ):
         residual = hidden_states
 
@@ -946,7 +947,8 @@ class JointAttnProcessor:
         encoder_hidden_states=None,
         attention_mask=None,
         temb=None,
-        num_tasks=2
+        num_tasks=2,
+        **kwargs
     ):
         
         residual = hidden_states
