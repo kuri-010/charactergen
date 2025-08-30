@@ -20,6 +20,7 @@ class ReferenceOnlyAttnProc(torch.nn.Module):
         mode="w", ref_dict: dict = None, is_cfg_guidance = False,num_views=4,
             multiview_attention=True,
             cross_domain_attention=False,
+            **kwargs
     ) -> Any:
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states
