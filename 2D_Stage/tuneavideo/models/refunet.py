@@ -30,14 +30,16 @@ class ReferenceOnlyAttnProc(torch.nn.Module):
                 ref_dict[self.name] = encoder_hidden_states
                 res = self.chained_proc(attn, hidden_states, encoder_hidden_states, attention_mask, num_views=1,
                     multiview_attention=False,
-                    cross_domain_attention=False,)
+                    cross_domain_attention=False,
+                    **kwargs)
             elif mode == 'r':
                 encoder_hidden_states = rearrange(encoder_hidden_states, '(b t) d c-> b (t d) c', t=num_views)
                 if self.name in ref_dict:
                     encoder_hidden_states = torch.cat([encoder_hidden_states, ref_dict.pop(self.name)], dim=1).unsqueeze(1).repeat(1,num_views,1,1).flatten(0,1)
                 res = self.chained_proc(attn, hidden_states, encoder_hidden_states, attention_mask, num_views=num_views,
                     multiview_attention=False,
-                    cross_domain_attention=False,)
+                    cross_domain_attention=False,
+                    **kwargs)
             elif mode == 'm':
                 encoder_hidden_states = torch.cat([encoder_hidden_states, ref_dict[self.name]], dim=1)
             elif mode == 'n':
@@ -45,11 +47,12 @@ class ReferenceOnlyAttnProc(torch.nn.Module):
                 encoder_hidden_states = torch.cat([encoder_hidden_states], dim=1).unsqueeze(1).repeat(1,num_views,1,1).flatten(0,1)
                 res = self.chained_proc(attn, hidden_states, encoder_hidden_states, attention_mask, num_views=num_views,
                     multiview_attention=False,
-                    cross_domain_attention=False,)
+                    cross_domain_attention=False,
+                    **kwargs)
             else:
                 assert False, mode
         else:
-            res = self.chained_proc(attn, hidden_states, encoder_hidden_states, attention_mask)
+            res = self.chained_proc(attn, hidden_states, encoder_hidden_states, attention_mask, **kwargs)
         return res
         
 class RefOnlyNoisedUNet(torch.nn.Module):
